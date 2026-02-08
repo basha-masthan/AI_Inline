@@ -1,11 +1,74 @@
 import os
 import sys
+import subprocess
+
+# Check and install dependencies if missing
+def check_dependencies():
+    required = ["openai", "python-dotenv", "colorama"]
+    missing = []
+    for package in required:
+        try:
+            if package == "python-dotenv":
+                import dotenv
+            else:
+                __import__(package)
+        except ImportError:
+            missing.append(package)
+    
+    if missing:
+        print(f"Installing missing dependencies: {', '.join(missing)}...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
+            print("Dependencies installed successfully!\n")
+        except Exception as e:
+            print(f"Failed to install dependencies: {e}")
+            print("Please run: pip install openai python-dotenv colorama")
+            sys.exit(1)
+
+check_dependencies()
+
 from openai import OpenAI
 from dotenv import load_dotenv
 from colorama import init, Fore, Style
 
+
 # Initialize colorama for cross-platform colored terminal output
 init(autoreset=True)
+
+def setup_config():
+    """Interactive wizard to create .env file if it's missing."""
+    print(Fore.CYAN + "------------------------------------------")
+    print(Fore.CYAN + "      INITIAL CONFIGURATION SETUP")
+    print(Fore.CYAN + "------------------------------------------" + Style.RESET_ALL)
+    
+    token = input(f"[{Fore.GREEN}INPUT{Style.RESET_ALL}] Enter your GitHub Token: ").strip()
+    
+    print(f"\n{Fore.YELLOW}Select preferred AI model:{Style.RESET_ALL}")
+    models = {
+        "1": ("gpt-4o", "Standard"),
+        "2": ("gpt-4o-mini", "Faster"),
+        "3": ("o1-preview", "Advanced Reasoning"),
+        "4": ("o1-mini", "Advanced Reasoning Small"),
+        "5": ("meta-llama-3.1-70b-instruct", "Llama-3-70b")
+    }
+    
+    for key, (name, desc) in models.items():
+        print(f"  {key}] {name} ({desc})")
+    
+    choice = input(f"[{Fore.GREEN}INPUT{Style.RESET_ALL}] Select model (1-5) [1]: ").strip() or "1"
+    model_name = models.get(choice, models["1"])[0]
+
+    with open(".env", "w") as f:
+        f.write("# GitHub AI Assistant Config\n")
+        f.write(f"GITHUB_TOKEN={token}\n")
+        f.write(f"MODEL_NAME={model_name}\n")
+    
+    print(f"\n{Fore.GREEN}[SUCCESS] .env file created successfully!{Style.RESET_ALL}")
+    print(Fore.CYAN + "------------------------------------------\n" + Style.RESET_ALL)
+    
+    # Reload environment variables
+    load_dotenv()
+    return token, model_name
 
 def main():
     # Load environment variables from .env file
@@ -14,9 +77,12 @@ def main():
     token = os.getenv("GITHUB_TOKEN")
     model = os.getenv("MODEL_NAME", "gpt-4o")
 
+    # If token is missing, run the setup wizard
     if not token:
-        print(Fore.RED + "Error: GITHUB_TOKEN not found in environment or .env file.")
-        print("Please create a .env file with GITHUB_TOKEN=your_token")
+        token, model = setup_config()
+
+    if not token:
+        print(Fore.RED + "Error: GITHUB_TOKEN is required to run the assistant.")
         sys.exit(1)
 
     # Initialize the OpenAI client pointing to GitHub Models API
@@ -24,6 +90,7 @@ def main():
         base_url="https://models.inference.ai.azure.com",
         api_key=token,
     )
+
 
     print(Style.BRIGHT + Fore.CYAN + "=== GitHub AI Terminal Assistant ===")
     print(Fore.YELLOW + f"Using model: {model}")
